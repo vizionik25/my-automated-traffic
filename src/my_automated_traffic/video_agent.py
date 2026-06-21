@@ -3,17 +3,21 @@ import json
 from typing import Dict, Any, List
 import edge_tts
 from gtts import gTTS
+from PIL import Image, ImageDraw
+
 
 class VideoAgent:
     """Agent responsible for generating short-form video scripts and voiceover audio."""
 
-    def __init__(self, llm_client: Any) -> None:
-        """Initializes the VideoAgent with an LLM client.
+    def __init__(self, llm_client: Any, imagen_client: Any = None) -> None:
+        """Initializes the VideoAgent with an LLM client and optional Imagen client.
 
         Args:
             llm_client: The LLM client used to generate scripts.
+            imagen_client: The Imagen client used to generate images.
         """
         self.llm_client = llm_client
+        self.imagen_client = imagen_client
 
     def generate_script(self, niche: str) -> str:
         """Generates a short-form video script for a given niche.
@@ -117,3 +121,44 @@ class VideoAgent:
                 "end": cue.end.total_seconds()
             })
         return timestamps
+
+    def _create_fallback_image(self, output_path: str, width: int = 1080, height: int = 1920) -> str:
+        # Create a vertical SFW gradient fallback image
+        image = Image.new("RGB", (width, height), "#1e1b4b")  # Dark Indigo
+        draw = ImageDraw.Draw(image)
+        # Draw a simple accent gradient/circle
+        draw.ellipse([width//4, height//4, 3*width//4, 3*height//4], fill="#312e81")
+        image.save(output_path, "PNG")
+        return output_path
+
+    def generate_scene_images(self, scenes: List[Dict[str, Any]], output_dir: str) -> List[str]:
+        os.makedirs(output_dir, exist_ok=True)
+        image_paths = []
+        
+        for scene in scenes:
+            scene_num = scene["scene_number"]
+            prompt = scene["visual_prompt"]
+            img_path = os.path.join(output_dir, f"scene_{scene_num}.png")
+            
+            if not self.imagen_client:
+                self._create_fallback_image(img_path)
+                image_paths.append(img_path)
+                continue
+                
+            try:
+                # Call the Imagen client
+                result = self.imagen_client.generate_images(
+                    prompt=f"{prompt}, high quality, cinematic lighting, safe for work, SFW",
+                    number_of_images=1,
+                    aspect_ratio="9:16"
+                )
+                image_bytes = result.generated_images[0].bytes
+                with open(img_path, "wb") as f:
+                    f.write(image_bytes)
+            except Exception as e:
+                # Fallback to Pillow gradient
+                self._create_fallback_image(img_path)
+                
+            image_paths.append(img_path)
+        return image_paths
+

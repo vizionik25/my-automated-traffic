@@ -108,3 +108,41 @@ def test_generate_voiceover(tmp_path):
         assert timestamps[0]["start"] == 1.0  # 10M ticks = 1s
         assert timestamps[0]["end"] == 1.5
 
+
+def test_generate_scene_images(tmp_path):
+    mock_llm = MagicMock()
+    # We will mock the Imagen client's generate_images response
+    mock_imagen = MagicMock()
+    mock_image_obj = MagicMock()
+    mock_image_obj.bytes = b"fake image bytes"
+    mock_imagen.generate_images.return_value = MagicMock(generated_images=[mock_image_obj])
+    
+    agent = VideoAgent(llm_client=mock_llm, imagen_client=mock_imagen)
+    scenes = [
+        {"scene_number": 1, "visual_prompt": "Cozy cafe"}
+    ]
+    
+    image_paths = agent.generate_scene_images(scenes, str(tmp_path))
+    assert len(image_paths) == 1
+    assert os.path.exists(image_paths[0])
+    with open(image_paths[0], "rb") as f:
+        assert f.read() == b"fake image bytes"
+        
+def test_generate_scene_images_fallback(tmp_path):
+    mock_llm = MagicMock()
+    # Imagen client throws an exception
+    mock_imagen = MagicMock()
+    mock_imagen.generate_images.side_effect = Exception("API error")
+    
+    agent = VideoAgent(llm_client=mock_llm, imagen_client=mock_imagen)
+    scenes = [
+        {"scene_number": 1, "visual_prompt": "Cozy cafe"}
+    ]
+    
+    image_paths = agent.generate_scene_images(scenes, str(tmp_path))
+    assert len(image_paths) == 1
+    assert os.path.exists(image_paths[0])
+    # Should create a valid gradient or solid fallback image (check that size is > 0)
+    assert os.path.getsize(image_paths[0]) > 0
+
+
