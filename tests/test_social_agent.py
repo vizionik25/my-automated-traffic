@@ -26,30 +26,54 @@ def test_social_agent_validation() -> None:
     """Test parameter validations in SocialAgent."""
     mock_llm = MagicMock()
     
-    with pytest.raises(ValueError):
-        SocialAgent(llm_client=None)
+    with pytest.raises(ValueError, match="llm_client cannot be None"):
+        SocialAgent(llm_client=None)  # type: ignore
 
     agent = SocialAgent(llm_client=mock_llm)
     
     # Test invalid threads for is_relevant
-    with pytest.raises(ValueError):
-        agent.is_relevant(None, niche="dating")
+    with pytest.raises(ValueError, match="thread must be a non-empty dictionary"):
+        agent.is_relevant(None, niche="dating")  # type: ignore
     
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="thread must be a non-empty dictionary"):
         agent.is_relevant({}, niche="dating")
+
+    with pytest.raises(ValueError, match="thread must contain 'title' and 'content' keys"):
+        agent.is_relevant({"id": "t1"}, niche="dating")
         
-    with pytest.raises(ValueError):
-        agent.is_relevant({"title": ""}, niche="dating")
+    with pytest.raises(ValueError, match="thread title must be a non-empty string"):
+        agent.is_relevant({"title": "", "content": "some content"}, niche="dating")
         
-    with pytest.raises(ValueError):
-        agent.is_relevant({"title": "some title", "content": ""}, niche="")
+    with pytest.raises(ValueError, match="thread content must be a non-empty string"):
+        agent.is_relevant({"title": "some title", "content": "   "}, niche="dating")
+
+    with pytest.raises(ValueError, match="niche must be a non-empty string"):
+        agent.is_relevant({"title": "some title", "content": "some content"}, niche="")
 
     # Test invalid inputs for generate_reply
-    with pytest.raises(ValueError):
-        agent.generate_reply(None, ref_blog_url="http://blog.com/dating-tips")
+    with pytest.raises(ValueError, match="thread must be a non-empty dictionary"):
+        agent.generate_reply(None, ref_blog_url="http://blog.com/dating-tips")  # type: ignore
         
-    with pytest.raises(ValueError):
-        agent.generate_reply({"title": "some title"}, ref_blog_url="")
+    with pytest.raises(ValueError, match="ref_blog_url must be a non-empty string"):
+        agent.generate_reply({"title": "some title", "content": "some content"}, ref_blog_url="")
 
-    with pytest.raises(ValueError):
-        agent.generate_reply({"title": "some title"}, ref_blog_url="not_a_url")
+    with pytest.raises(ValueError, match="ref_blog_url must start with http:// or https://"):
+        agent.generate_reply({"title": "some title", "content": "some content"}, ref_blog_url="not_a_url")
+
+def test_social_agent_llm_failure() -> None:
+    """Test LLM response failure for generate_reply (returns empty/None)."""
+    mock_llm = MagicMock()
+    agent = SocialAgent(llm_client=mock_llm)
+    thread = {"title": "some title", "content": "some content"}
+
+    mock_llm.generate.return_value = None
+    with pytest.raises(RuntimeError, match="Failed to generate a valid reply from LLM"):
+        agent.generate_reply(thread, ref_blog_url="http://blog.com")
+
+    mock_llm.generate.return_value = ""
+    with pytest.raises(RuntimeError, match="Failed to generate a valid reply from LLM"):
+        agent.generate_reply(thread, ref_blog_url="http://blog.com")
+        
+    mock_llm.generate.return_value = "   "
+    with pytest.raises(RuntimeError, match="Failed to generate a valid reply from LLM"):
+        agent.generate_reply(thread, ref_blog_url="http://blog.com")
