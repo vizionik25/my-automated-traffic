@@ -149,7 +149,8 @@ CREATE TABLE analytics (
   2. **Voice Synthesis**: Generates a high-quality SFW voiceover using python-gTTS, Edge-TTS, or ElevenLabs.
   3. **Visual Stitching**: Stitches royalty-free SFW background loops (dating couples, abstract aesthetic animations, typing screen recordings) with the audio track.
   4. **Subtitles & Overlays**: Auto-burns text subtitles using MoviePy / FFmpeg.
-  5. **Queuing**: Saves the final `.mp4` to the asset directory and marks it `ready` in the database. (Upload can be done manually or via headless selenium auto-posters depending on credentials).
+  5. **Queuing & Storage**: Saves the final `.mp4` video locally to a designated asset directory and marks the state as `ready` in the database.
+  6. **Upload Scope**: For version 1, direct uploading is handled manually by the user (or via external third-party scheduler tools) using the generated video file. Auto-publishing via platform API/automation is a secondary phase feature due to strict account token/cookie expiration limits.
 
 ### 4.5 Reddit/X Social Reply Monitoring Agent
 - **Workflow**:
