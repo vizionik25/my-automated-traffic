@@ -6,7 +6,10 @@ from typing import Dict, Any, List
 import edge_tts
 from gtts import gTTS
 from PIL import Image, ImageDraw, ImageFont
-from moviepy import ImageClip, AudioFileClip, CompositeVideoClip
+try:
+    from moviepy.editor import ImageClip, AudioFileClip, CompositeVideoClip
+except ImportError:
+    from moviepy import ImageClip, AudioFileClip, CompositeVideoClip
 
 
 class VideoAgent:
@@ -91,6 +94,8 @@ class VideoAgent:
     async def generate_voiceover(self, text: str, output_audio_path: str) -> List[Dict[str, Any]]:
         """Generates voiceover audio and returns word-level timestamps using edge-tts.
 
+        This is the primary TTS method for the video pipeline.
+
         Args:
             text: The text to synthesize.
             output_audio_path: Output file path for the MP3 audio.
@@ -165,6 +170,49 @@ class VideoAgent:
             image_paths.append(img_path)
         return image_paths
 
+    def _load_font(self, size: int) -> Any:
+        """Finds and loads a readable TrueType font from system paths, falling back to default."""
+        font_paths = []
+        if os.name == "nt":  # Windows
+            windir = os.environ.get("WINDIR", "C:\\Windows")
+            font_paths.extend([
+                os.path.join(windir, "Fonts", "arial.ttf"),
+                os.path.join(windir, "Fonts", "calibri.ttf")
+            ])
+        elif os.uname().sysname == "Darwin":  # macOS
+            font_paths.extend([
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+                "/System/Library/Fonts/Helvetica.ttc",
+                "/System/Library/Fonts/Supplemental/Courier New.ttf",
+                "/Library/Fonts/Arial.ttf"
+            ])
+        else:  # Linux/Unix
+            font_paths.extend([
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+            ])
+            
+        for path in font_paths:
+            if os.path.exists(path):
+                try:
+                    return ImageFont.truetype(path, size)
+                except Exception:
+                    continue
+                    
+        # Try loading by name directly using PIL search
+        for name in ["arial.ttf", "Arial.ttf", "Helvetica.ttf", "DejaVuSans.ttf"]:
+            try:
+                return ImageFont.truetype(name, size)
+            except Exception:
+                continue
+
+        # Ultimate fallback
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            return ImageFont.load_default()
+
     def render_caption_frame(
         self,
         words: List[str],
@@ -177,11 +225,7 @@ class VideoAgent:
         img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # Load a default font
-        try:
-            font = ImageFont.load_default(size=48)
-        except TypeError:
-            font = ImageFont.load_default()
+        font = self._load_font(48)
             
         # Draw words centered horizontally, active word highlighted
         text_y = height // 2
@@ -218,89 +262,111 @@ class VideoAgent:
         logo_path: str = None,
         deliverable_path: str = None
     ) -> str:
-        # Determine total duration from audio
-        audio_clip = AudioFileClip(audio_path)
-        total_duration = audio_clip.duration
-        
-        # Calculate duration per scene
-        scene_duration = total_duration / len(scenes)
-        
+        audio_clip = None
+        video = None
         clips = []
         temp_dir = tempfile.mkdtemp()
         
-        # 1. Compile background images with gentle zoom animation
-        for i, img_path in enumerate(images):
-            # Ken Burns effect (10% scale up)
-            clip = ImageClip(img_path).set_duration(scene_duration).set_start(i * scene_duration)
-            # Gentle resizing function over time
-            clip = clip.resize(lambda t: 1.0 + 0.1 * (t / scene_duration))
-            clips.append(clip)
+        try:
+            # Determine total duration from audio
+            audio_clip = AudioFileClip(audio_path)
+            total_duration = audio_clip.duration
             
-        # 2. Overlay Logo if provided
-        if logo_path and os.path.exists(logo_path):
-            logo_clip = ImageClip(logo_path).set_duration(total_duration).resize(width=150)
-            # Position top-right
-            logo_clip = logo_clip.set_position(("right", "top")).margin(right=30, top=30, opacity=0)
-            clips.append(logo_clip)
+            # Calculate duration per scene
+            scene_duration = total_duration / len(scenes)
             
-        # 3. Overlay Deliverable mockups during the CTA (last scene)
-        if deliverable_path and os.path.exists(deliverable_path):
-            cta_start = (len(scenes) - 1) * scene_duration
-            cta_duration = scene_duration
-            deliverable_clip = (
-                ImageClip(deliverable_path)
-                .set_start(cta_start)
-                .set_duration(cta_duration)
-                .resize(width=400)
-                .set_position("center")
+            # 1. Compile background images with gentle zoom animation
+            for i, img_path in enumerate(images):
+                # Ken Burns effect (10% scale up)
+                clip = ImageClip(img_path).set_duration(scene_duration).set_start(i * scene_duration)
+                # Gentle resizing function over time
+                clip = clip.resize(lambda t: 1.0 + 0.1 * (t / scene_duration))
+                clips.append(clip)
+                
+            # 2. Overlay Logo if provided
+            if logo_path and os.path.exists(logo_path):
+                logo_clip = ImageClip(logo_path).set_duration(total_duration).resize(width=150)
+                # Position top-right
+                logo_clip = logo_clip.set_position(("right", "top")).margin(right=30, top=30, opacity=0)
+                clips.append(logo_clip)
+                
+            # 3. Overlay Deliverable mockups during the CTA (last scene)
+            if deliverable_path and os.path.exists(deliverable_path):
+                cta_start = (len(scenes) - 1) * scene_duration
+                cta_duration = scene_duration
+                deliverable_clip = (
+                    ImageClip(deliverable_path)
+                    .set_start(cta_start)
+                    .set_duration(cta_duration)
+                    .resize(width=400)
+                    .set_position("center")
+                )
+                clips.append(deliverable_clip)
+                
+            # 4. Burn subtitles word-by-word
+            # Group words by sentence or window of 3 words
+            window_size = 3
+            words_list = [w["word"] for w in word_timestamps]
+            
+            for idx, item in enumerate(word_timestamps):
+                start_t = item["start"]
+                end_t = item["end"]
+                
+                # Determine stationary non-overlapping window slice
+                chunk_idx = idx // window_size
+                window_start_idx = chunk_idx * window_size
+                window_end_idx = min(len(word_timestamps), window_start_idx + window_size)
+                window_words = words_list[window_start_idx:window_end_idx]
+                active_pos_in_window = idx - window_start_idx
+                
+                # Pre-render caption PNG
+                png_filename = f"caption_{idx}.png"
+                png_path = os.path.join(temp_dir, png_filename)
+                self.render_caption_frame(window_words, active_pos_in_window, png_path)
+                
+                # Create ImageClip for this exact word window
+                sub_clip = (
+                    ImageClip(png_path)
+                    .set_start(start_t)
+                    .set_duration(end_t - start_t)
+                )
+                clips.append(sub_clip)
+                
+            # 5. Composite and export
+            video = CompositeVideoClip(clips, size=(1080, 1920))
+            video = video.set_audio(audio_clip)
+            
+            os.makedirs(os.path.dirname(os.path.abspath(output_video_path)), exist_ok=True)
+            video.write_videofile(
+                output_video_path,
+                fps=24,
+                codec="libx264",
+                audio_codec="aac",
+                logger=None
             )
-            clips.append(deliverable_clip)
             
-        # 4. Burn subtitles word-by-word
-        # Group words by sentence or window of 3 words
-        window_size = 3
-        words_list = [w["word"] for w in word_timestamps]
-        
-        for idx, item in enumerate(word_timestamps):
-            start_t = item["start"]
-            end_t = item["end"]
+            return output_video_path
             
-            # Determine window slice
-            window_start_idx = max(0, idx - 1)
-            window_end_idx = min(len(word_timestamps), window_start_idx + window_size)
-            window_words = words_list[window_start_idx:window_end_idx]
-            active_pos_in_window = idx - window_start_idx
-            
-            # Pre-render caption PNG
-            png_filename = f"caption_{idx}.png"
-            png_path = os.path.join(temp_dir, png_filename)
-            self.render_caption_frame(window_words, active_pos_in_window, png_path)
-            
-            # Create ImageClip for this exact word window
-            sub_clip = (
-                ImageClip(png_path)
-                .set_start(start_t)
-                .set_duration(end_t - start_t)
-            )
-            clips.append(sub_clip)
-            
-        # 5. Composite and export
-        video = CompositeVideoClip(clips, size=(1080, 1920))
-        video = video.set_audio(audio_clip)
-        
-        os.makedirs(os.path.dirname(os.path.abspath(output_video_path)), exist_ok=True)
-        video.write_videofile(
-            output_video_path,
-            fps=24,
-            codec="libx264",
-            audio_codec="aac",
-            logger=None
-        )
-        
-        # Clean up temp folder
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        
-        return output_video_path
+        finally:
+            # Call clip.close() on all clips to prevent fd leaks
+            for clip in clips:
+                try:
+                    clip.close()
+                except Exception:
+                    pass
+            if video is not None:
+                try:
+                    video.close()
+                except Exception:
+                    pass
+            if audio_clip is not None:
+                try:
+                    audio_clip.close()
+                except Exception:
+                    pass
+                    
+            # Clean up temp folder
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 

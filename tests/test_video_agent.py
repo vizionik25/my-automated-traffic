@@ -209,5 +209,66 @@ def test_compose_video(tmp_path):
         mock_comp_instance.write_videofile.assert_called_once()
 
 
+def test_load_font():
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    font = agent._load_font(24)
+    assert font is not None
+
+
+def test_compose_video_cleanup_on_error(tmp_path):
+    from PIL import Image
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    dummy_img = os.path.join(tmp_path, "dummy_scene.png")
+    Image.new("RGB", (108, 192), "#1e1b4b").save(dummy_img)
+    
+    dummy_audio = os.path.join(tmp_path, "dummy_audio.mp3")
+    with open(dummy_audio, "wb") as f:
+        f.write(b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 100)
+        
+    scenes = [
+        {"scene_number": 1, "voiceover_text": "Dating tips"}
+    ]
+    word_timestamps = [
+        {"word": "Dating", "start": 0.0, "end": 0.5}
+    ]
+    
+    output_video = os.path.join(tmp_path, "output.mp4")
+    
+    with patch("my_automated_traffic.video_agent.ImageClip") as mock_img_clip, \
+         patch("my_automated_traffic.video_agent.AudioFileClip") as mock_audio_clip, \
+         patch("my_automated_traffic.video_agent.CompositeVideoClip") as mock_composite:
+         
+        mock_clip_instance = MagicMock()
+        mock_img_clip.return_value = mock_clip_instance
+        mock_clip_instance.set_duration.return_value = mock_clip_instance
+        mock_clip_instance.set_start.return_value = mock_clip_instance
+        mock_clip_instance.resize.return_value = mock_clip_instance
+        
+        mock_audio_instance = MagicMock()
+        mock_audio_clip.return_value = mock_audio_instance
+        
+        mock_comp_instance = MagicMock()
+        mock_composite.return_value = mock_comp_instance
+        mock_comp_instance.set_audio.return_value = mock_comp_instance
+        mock_comp_instance.write_videofile.side_effect = RuntimeError("Encoding failed")
+        
+        with pytest.raises(RuntimeError, match="Encoding failed"):
+            agent.compose_video(
+                scenes=scenes,
+                images=[dummy_img],
+                audio_path=dummy_audio,
+                word_timestamps=word_timestamps,
+                output_video_path=output_video
+            )
+            
+        mock_clip_instance.close.assert_called()
+        mock_audio_instance.close.assert_called()
+        mock_comp_instance.close.assert_called()
+
+
+
 
 
