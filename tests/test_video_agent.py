@@ -158,4 +158,56 @@ def test_render_caption_frame(tmp_path):
     assert os.path.getsize(result_path) > 0
 
 
+def test_compose_video(tmp_path):
+    from PIL import Image
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    # Create mock inputs (dummy image, dummy MP3)
+    dummy_img = os.path.join(tmp_path, "dummy_scene.png")
+    Image.new("RGB", (108, 192), "#1e1b4b").save(dummy_img)
+    
+    dummy_audio = os.path.join(tmp_path, "dummy_audio.mp3")
+    with open(dummy_audio, "wb") as f:
+        f.write(b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 100)
+        
+    scenes = [
+        {"scene_number": 1, "voiceover_text": "Dating tips"}
+    ]
+    word_timestamps = [
+        {"word": "Dating", "start": 0.0, "end": 0.5},
+        {"word": "tips", "start": 0.5, "end": 1.0}
+    ]
+    
+    output_video = os.path.join(tmp_path, "output.mp4")
+    
+    # Mock moviepy execution to check pipeline without executing heavy FFmpeg rendering in tests
+    with patch("my_automated_traffic.video_agent.ImageClip") as mock_img_clip, \
+         patch("my_automated_traffic.video_agent.AudioFileClip") as mock_audio_clip, \
+         patch("my_automated_traffic.video_agent.CompositeVideoClip") as mock_composite:
+         
+        mock_clip_instance = MagicMock()
+        mock_img_clip.return_value = mock_clip_instance
+        mock_clip_instance.set_duration.return_value = mock_clip_instance
+        mock_clip_instance.set_start.return_value = mock_clip_instance
+        mock_clip_instance.resize.return_value = mock_clip_instance
+        
+        # Mock composite to return a clip that responds to write_videofile
+        mock_comp_instance = MagicMock()
+        mock_composite.return_value = mock_comp_instance
+        mock_comp_instance.set_audio.return_value = mock_comp_instance
+        
+        result = agent.compose_video(
+            scenes=scenes,
+            images=[dummy_img],
+            audio_path=dummy_audio,
+            word_timestamps=word_timestamps,
+            output_video_path=output_video
+        )
+        
+        assert result == output_video
+        mock_comp_instance.write_videofile.assert_called_once()
+
+
+
 

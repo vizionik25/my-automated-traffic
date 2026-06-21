@@ -1,9 +1,12 @@
 import os
 import json
+import tempfile
+import shutil
 from typing import Dict, Any, List
 import edge_tts
 from gtts import gTTS
 from PIL import Image, ImageDraw, ImageFont
+from moviepy import ImageClip, AudioFileClip, CompositeVideoClip
 
 
 class VideoAgent:
@@ -204,5 +207,100 @@ class VideoAgent:
             
         img.save(output_path, "PNG")
         return output_path
+
+    def compose_video(
+        self,
+        scenes: List[Dict[str, Any]],
+        images: List[str],
+        audio_path: str,
+        word_timestamps: List[Dict[str, Any]],
+        output_video_path: str,
+        logo_path: str = None,
+        deliverable_path: str = None
+    ) -> str:
+        # Determine total duration from audio
+        audio_clip = AudioFileClip(audio_path)
+        total_duration = audio_clip.duration
+        
+        # Calculate duration per scene
+        scene_duration = total_duration / len(scenes)
+        
+        clips = []
+        temp_dir = tempfile.mkdtemp()
+        
+        # 1. Compile background images with gentle zoom animation
+        for i, img_path in enumerate(images):
+            # Ken Burns effect (10% scale up)
+            clip = ImageClip(img_path).set_duration(scene_duration).set_start(i * scene_duration)
+            # Gentle resizing function over time
+            clip = clip.resize(lambda t: 1.0 + 0.1 * (t / scene_duration))
+            clips.append(clip)
+            
+        # 2. Overlay Logo if provided
+        if logo_path and os.path.exists(logo_path):
+            logo_clip = ImageClip(logo_path).set_duration(total_duration).resize(width=150)
+            # Position top-right
+            logo_clip = logo_clip.set_position(("right", "top")).margin(right=30, top=30, opacity=0)
+            clips.append(logo_clip)
+            
+        # 3. Overlay Deliverable mockups during the CTA (last scene)
+        if deliverable_path and os.path.exists(deliverable_path):
+            cta_start = (len(scenes) - 1) * scene_duration
+            cta_duration = scene_duration
+            deliverable_clip = (
+                ImageClip(deliverable_path)
+                .set_start(cta_start)
+                .set_duration(cta_duration)
+                .resize(width=400)
+                .set_position("center")
+            )
+            clips.append(deliverable_clip)
+            
+        # 4. Burn subtitles word-by-word
+        # Group words by sentence or window of 3 words
+        window_size = 3
+        words_list = [w["word"] for w in word_timestamps]
+        
+        for idx, item in enumerate(word_timestamps):
+            start_t = item["start"]
+            end_t = item["end"]
+            
+            # Determine window slice
+            window_start_idx = max(0, idx - 1)
+            window_end_idx = min(len(word_timestamps), window_start_idx + window_size)
+            window_words = words_list[window_start_idx:window_end_idx]
+            active_pos_in_window = idx - window_start_idx
+            
+            # Pre-render caption PNG
+            png_filename = f"caption_{idx}.png"
+            png_path = os.path.join(temp_dir, png_filename)
+            self.render_caption_frame(window_words, active_pos_in_window, png_path)
+            
+            # Create ImageClip for this exact word window
+            sub_clip = (
+                ImageClip(png_path)
+                .set_start(start_t)
+                .set_duration(end_t - start_t)
+            )
+            clips.append(sub_clip)
+            
+        # 5. Composite and export
+        video = CompositeVideoClip(clips, size=(1080, 1920))
+        video = video.set_audio(audio_clip)
+        
+        os.makedirs(os.path.dirname(os.path.abspath(output_video_path)), exist_ok=True)
+        video.write_videofile(
+            output_video_path,
+            fps=24,
+            codec="libx264",
+            audio_codec="aac",
+            logger=None
+        )
+        
+        # Clean up temp folder
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        return output_video_path
+
 
 
