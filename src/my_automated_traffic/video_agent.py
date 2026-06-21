@@ -1,5 +1,6 @@
 import os
-from typing import Any
+import json
+from typing import Dict, Any
 from gtts import gTTS
 
 class VideoAgent:
@@ -27,6 +28,24 @@ class VideoAgent:
             "Must contain 'Hook:', 'Body:', and 'CTA: link in bio'."
         )
         return self.llm_client.generate(prompt)
+
+    def generate_structured_script(self, niche: str) -> Dict[str, Any]:
+        prompt = (
+            f"Write a short SFW relationship advice script about {niche}. "
+            "Return JSON only matching this schema:\n"
+            "{\n"
+            "  \"scenes\": [\n"
+            "    {\"scene_number\": 1, \"voiceover_text\": \"text\", \"visual_prompt\": \"visual description\"}\n"
+            "  ]\n"
+            "}"
+        )
+        response_text = self.llm_client.generate(prompt)
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            # Simple fallback parser if LLM wrapped in markdown blocks
+            clean_text = response_text.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean_text)
 
     def generate_audio(self, text: str, output_path: str, lang: str = "en") -> str:
         """Generates an MP3 audio file from text using gTTS.

@@ -61,3 +61,19 @@ def test_tts_generation_runtime_error(mock_gtts):
     with pytest.raises(RuntimeError, match="Failed to generate or save TTS audio: Disk full"):
         agent.generate_audio("Hello", "test.mp3")
 
+
+def test_generate_structured_script():
+    mock_llm = MagicMock()
+    mock_llm.generate.return_value = (
+        '{"scenes": ['
+        '{"scene_number": 1, "voiceover_text": "Hook text", "visual_prompt": "Prompt 1"},'
+        '{"scene_number": 2, "voiceover_text": "Body text", "visual_prompt": "Prompt 2"}'
+        ']}'
+    )
+    agent = VideoAgent(llm_client=mock_llm)
+    script_data = agent.generate_structured_script(niche="dating")
+    
+    assert "scenes" in script_data
+    assert len(script_data["scenes"]) == 2
+    assert script_data["scenes"][0]["voiceover_text"] == "Hook text"
+    assert script_data["scenes"][0]["visual_prompt"] == "Prompt 1"
