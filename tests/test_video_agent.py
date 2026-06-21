@@ -146,3 +146,16 @@ def test_generate_scene_images_fallback(tmp_path):
     assert os.path.getsize(image_paths[0]) > 0
 
 
+def test_render_caption_frame(tmp_path):
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    frame_path = os.path.join(tmp_path, "caption_frame.png")
+    words = ["Decoding", "their", "signs"]
+    result_path = agent.render_caption_frame(words, active_index=1, output_path=frame_path)
+    
+    assert os.path.exists(result_path)
+    assert os.path.getsize(result_path) > 0
+
+
+

@@ -3,7 +3,7 @@ import json
 from typing import Dict, Any, List
 import edge_tts
 from gtts import gTTS
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 class VideoAgent:
@@ -161,4 +161,48 @@ class VideoAgent:
                 
             image_paths.append(img_path)
         return image_paths
+
+    def render_caption_frame(
+        self,
+        words: List[str],
+        active_index: int,
+        output_path: str,
+        width: int = 1080,
+        height: int = 1920
+    ) -> str:
+        # Create a transparent base image
+        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        # Load a default font
+        try:
+            font = ImageFont.load_default(size=48)
+        except TypeError:
+            font = ImageFont.load_default()
+            
+        # Draw words centered horizontally, active word highlighted
+        text_y = height // 2
+        total_width = 0
+        word_spacings = []
+        
+        for w in words:
+            # Estimate text width
+            try:
+                w_w = draw.textlength(w + " ", font=font)
+            except AttributeError:
+                w_w = len(w + " ") * 24  # rough fallback
+            word_spacings.append(w_w)
+            total_width += w_w
+            
+        start_x = (width - total_width) // 2
+        current_x = start_x
+        
+        for i, word in enumerate(words):
+            color = (255, 255, 0, 255) if i == active_index else (255, 255, 255, 255)
+            draw.text((current_x, text_y), word, fill=color, font=font)
+            current_x += word_spacings[i]
+            
+        img.save(output_path, "PNG")
+        return output_path
+
 
