@@ -17,8 +17,10 @@ class SocialAgent:
     )
 
     REPLY_PROMPT_TEMPLATE = (
-        "Write a helpful, empathetic SFW response to this thread: '{title}'. "
-        "Do not spam. Softly reference this resource link: {ref_blog_url}."
+        "Write a helpful, empathetic SFW response to this thread.\n"
+        "Title: {title}\n"
+        "Content: {content}\n\n"
+        "Do not spam. Softly reference this resource link: {ref_blog_url}"
     )
 
     def __init__(self, llm_client: LLMClient) -> None:
@@ -101,6 +103,7 @@ class SocialAgent:
 
         prompt = self.REPLY_PROMPT_TEMPLATE.format(
             title=thread["title"],
+            content=thread["content"],
             ref_blog_url=ref_blog_url
         )
         advice = self.llm_client.generate(prompt)
