@@ -12,6 +12,7 @@ class DatabaseManager:
         """Create and return a new SQLite connection with foreign keys enabled."""
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA foreign_keys = ON;")
+        conn.row_factory = sqlite3.Row
         return conn
 
     def initialize(self) -> None:
@@ -94,3 +95,44 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
             return [row[0] for row in cursor.fetchall()]
+
+    def add_offer(self, url: str, description: str, compliance_rules: str, niche: str) -> int:
+        """Add a new affiliate offer to the database and return its ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO offers (url, description, compliance_rules, niche) VALUES (?, ?, ?, ?)",
+                (url, description, compliance_rules, niche)
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def add_campaign(self, offer_id: int, name: str) -> int:
+        """Add a new campaign linked to an offer and return its ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO campaigns (offer_id, name) VALUES (?, ?)",
+                (offer_id, name)
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def update_campaign_status(self, campaign_id: int, status: str) -> None:
+        """Update the status of a specific campaign."""
+        if status not in ("active", "paused"):
+            raise ValueError(f"Invalid status: {status}. Status must be 'active' or 'paused'.")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE campaigns SET status = ? WHERE id = ?",
+                (status, campaign_id)
+            )
+            conn.commit()
+
+    def get_active_campaigns(self) -> list:
+        """Retrieve all currently active campaigns."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, offer_id, name, status FROM campaigns WHERE status = 'active'")
+            return cursor.fetchall()

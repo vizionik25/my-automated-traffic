@@ -88,3 +88,24 @@ def test_cascade_delete(db):
         # Verify the campaign was automatically deleted by CASCADE
         cursor.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,))
         assert cursor.fetchone() is None
+
+def test_create_offer_and_campaign(db):
+    offer_id = db.add_offer("http://offer.com", "Adult Dating Niche", "No email spam", "dating")
+    assert offer_id > 0
+    
+    campaign_id = db.add_campaign(offer_id, "Summer Dating Campaign")
+    assert campaign_id > 0
+    
+    campaigns = db.get_active_campaigns()
+    assert len(campaigns) == 0  # Starts as paused
+    
+    db.update_campaign_status(campaign_id, "active")
+    active_campaigns = db.get_active_campaigns()
+    assert len(active_campaigns) == 1
+    assert active_campaigns[0]["name"] == "Summer Dating Campaign"
+
+def test_invalid_campaign_status(db):
+    offer_id = db.add_offer("http://offer.com", "Adult Dating Niche", "No email spam", "dating")
+    campaign_id = db.add_campaign(offer_id, "Summer Dating Campaign")
+    with pytest.raises(ValueError):
+        db.update_campaign_status(campaign_id, "invalid_status")
