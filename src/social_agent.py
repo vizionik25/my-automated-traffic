@@ -77,7 +77,7 @@ class SocialAgent:
         response = self.llm_client.generate(prompt)
         if not response or not isinstance(response, str):
             return False
-        return response.strip().lower() == "yes"
+        return response.strip().rstrip('.!?,').lower() == "yes"
 
     def generate_reply(self, thread: Dict[str, Any], ref_blog_url: str) -> str:
         """Generate a helpful, empathetic, SFW response referencing a blog URL.
