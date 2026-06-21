@@ -77,3 +77,34 @@ def test_generate_structured_script():
     assert len(script_data["scenes"]) == 2
     assert script_data["scenes"][0]["voiceover_text"] == "Hook text"
     assert script_data["scenes"][0]["visual_prompt"] == "Prompt 1"
+
+
+def test_generate_voiceover(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    # We will mock the edge_tts Communicate to prevent network calls
+    with patch("my_automated_traffic.video_agent.edge_tts.Communicate") as mock_comm:
+        mock_instance = AsyncMock()
+        mock_comm.return_value = mock_instance
+        
+        # Mocking the generator of events/submaker data
+        async def mock_iterate():
+            # Yield chunks simulating word boundary events
+            yield {"type": "audio", "data": b"fake audio chunk"}
+            yield {"type": "WordBoundary", "offset": 10000000, "duration": 5000000, "text": "Dating"}
+            yield {"type": "WordBoundary", "offset": 15000000, "duration": 5000000, "text": "tips"}
+            
+        mock_instance.stream = mock_iterate
+        
+        audio_file = os.path.join(tmp_path, "voiceover.mp3")
+        timestamps = asyncio.run(agent.generate_voiceover("Dating tips", audio_file))
+        
+        assert len(timestamps) == 2
+        assert timestamps[0]["word"] == "Dating"
+        assert timestamps[0]["start"] == 1.0  # 10M ticks = 1s
+        assert timestamps[0]["end"] == 1.5
+

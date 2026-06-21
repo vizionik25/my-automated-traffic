@@ -1,6 +1,7 @@
 import os
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List
+import edge_tts
 from gtts import gTTS
 
 class VideoAgent:
@@ -79,3 +80,40 @@ class VideoAgent:
             raise RuntimeError(f"Failed to generate or save TTS audio: {e}") from e
 
         return output_path
+
+    async def generate_voiceover(self, text: str, output_audio_path: str) -> List[Dict[str, Any]]:
+        """Generates voiceover audio and returns word-level timestamps using edge-tts.
+
+        Args:
+            text: The text to synthesize.
+            output_audio_path: Output file path for the MP3 audio.
+
+        Returns:
+            A list of dictionaries with word, start, and end time.
+        """
+        if not text:
+            raise ValueError("Text content cannot be empty.")
+        if not output_audio_path:
+            raise ValueError("Output path cannot be empty.")
+            
+        os.makedirs(os.path.dirname(os.path.abspath(output_audio_path)), exist_ok=True)
+        
+        communicate = edge_tts.Communicate(text, "en-US-GuyNeural")
+        submaker = edge_tts.SubMaker()
+        
+        # Capture the file stream and generate timestamps
+        with open(output_audio_path, "wb") as fp:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    fp.write(chunk["data"])
+                elif chunk["type"] == "WordBoundary":
+                    submaker.feed(chunk)
+                    
+        timestamps = []
+        for cue in submaker.cues:
+            timestamps.append({
+                "word": cue.content,
+                "start": cue.start.total_seconds(),
+                "end": cue.end.total_seconds()
+            })
+        return timestamps
