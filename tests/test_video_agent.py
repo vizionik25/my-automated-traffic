@@ -1,7 +1,7 @@
 import os
 from unittest.mock import MagicMock, patch
 import pytest
-from src.video_agent import VideoAgent
+from my_automated_traffic.video_agent import VideoAgent
 
 def test_video_script_draft():
     mock_llm = MagicMock()
@@ -17,7 +17,7 @@ def test_video_script_draft():
     assert "Hook:" in script
     assert "CTA:" in script
 
-@patch("src.video_agent.gTTS")
+@patch("my_automated_traffic.video_agent.gTTS")
 def test_tts_generation(mock_gtts, tmp_path):
     # Mock the gTTS instance and save method
     mock_instance = MagicMock()
@@ -50,7 +50,7 @@ def test_tts_generation_empty_path():
     with pytest.raises(ValueError, match="Output path cannot be empty."):
         agent.generate_audio("Hello", "")
 
-@patch("src.video_agent.gTTS")
+@patch("my_automated_traffic.video_agent.gTTS")
 def test_tts_generation_runtime_error(mock_gtts):
     mock_instance = MagicMock()
     mock_gtts.return_value = mock_instance
@@ -60,4 +60,215 @@ def test_tts_generation_runtime_error(mock_gtts):
     agent = VideoAgent(llm_client=mock_llm)
     with pytest.raises(RuntimeError, match="Failed to generate or save TTS audio: Disk full"):
         agent.generate_audio("Hello", "test.mp3")
+
+
+def test_generate_structured_script():
+    mock_llm = MagicMock()
+    mock_llm.generate.return_value = (
+        '{"scenes": ['
+        '{"scene_number": 1, "voiceover_text": "Hook text", "visual_prompt": "Prompt 1"},'
+        '{"scene_number": 2, "voiceover_text": "Body text", "visual_prompt": "Prompt 2"}'
+        ']}'
+    )
+    agent = VideoAgent(llm_client=mock_llm)
+    script_data = agent.generate_structured_script(niche="dating")
+    
+    assert "scenes" in script_data
+    assert len(script_data["scenes"]) == 2
+    assert script_data["scenes"][0]["voiceover_text"] == "Hook text"
+    assert script_data["scenes"][0]["visual_prompt"] == "Prompt 1"
+
+
+def test_generate_voiceover(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    # We will mock the edge_tts Communicate to prevent network calls
+    with patch("my_automated_traffic.video_agent.edge_tts.Communicate") as mock_comm:
+        mock_instance = AsyncMock()
+        mock_comm.return_value = mock_instance
+        
+        # Mocking the generator of events/submaker data
+        async def mock_iterate():
+            # Yield chunks simulating word boundary events
+            yield {"type": "audio", "data": b"fake audio chunk"}
+            yield {"type": "WordBoundary", "offset": 10000000, "duration": 5000000, "text": "Dating"}
+            yield {"type": "WordBoundary", "offset": 15000000, "duration": 5000000, "text": "tips"}
+            
+        mock_instance.stream = mock_iterate
+        
+        audio_file = os.path.join(tmp_path, "voiceover.mp3")
+        timestamps = asyncio.run(agent.generate_voiceover("Dating tips", audio_file))
+        
+        assert len(timestamps) == 2
+        assert timestamps[0]["word"] == "Dating"
+        assert timestamps[0]["start"] == 1.0  # 10M ticks = 1s
+        assert timestamps[0]["end"] == 1.5
+
+
+def test_generate_scene_images(tmp_path):
+    mock_llm = MagicMock()
+    # We will mock the Imagen client's generate_images response
+    mock_imagen = MagicMock()
+    mock_image_obj = MagicMock()
+    mock_image_obj.bytes = b"fake image bytes"
+    mock_imagen.generate_images.return_value = MagicMock(generated_images=[mock_image_obj])
+    
+    agent = VideoAgent(llm_client=mock_llm, imagen_client=mock_imagen)
+    scenes = [
+        {"scene_number": 1, "visual_prompt": "Cozy cafe"}
+    ]
+    
+    image_paths = agent.generate_scene_images(scenes, str(tmp_path))
+    assert len(image_paths) == 1
+    assert os.path.exists(image_paths[0])
+    with open(image_paths[0], "rb") as f:
+        assert f.read() == b"fake image bytes"
+        
+def test_generate_scene_images_fallback(tmp_path):
+    mock_llm = MagicMock()
+    # Imagen client throws an exception
+    mock_imagen = MagicMock()
+    mock_imagen.generate_images.side_effect = Exception("API error")
+    
+    agent = VideoAgent(llm_client=mock_llm, imagen_client=mock_imagen)
+    scenes = [
+        {"scene_number": 1, "visual_prompt": "Cozy cafe"}
+    ]
+    
+    image_paths = agent.generate_scene_images(scenes, str(tmp_path))
+    assert len(image_paths) == 1
+    assert os.path.exists(image_paths[0])
+    # Should create a valid gradient or solid fallback image (check that size is > 0)
+    assert os.path.getsize(image_paths[0]) > 0
+
+
+def test_render_caption_frame(tmp_path):
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    frame_path = os.path.join(tmp_path, "caption_frame.png")
+    words = ["Decoding", "their", "signs"]
+    result_path = agent.render_caption_frame(words, active_index=1, output_path=frame_path)
+    
+    assert os.path.exists(result_path)
+    assert os.path.getsize(result_path) > 0
+
+
+def test_compose_video(tmp_path):
+    from PIL import Image
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    # Create mock inputs (dummy image, dummy MP3)
+    dummy_img = os.path.join(tmp_path, "dummy_scene.png")
+    Image.new("RGB", (108, 192), "#1e1b4b").save(dummy_img)
+    
+    dummy_audio = os.path.join(tmp_path, "dummy_audio.mp3")
+    with open(dummy_audio, "wb") as f:
+        f.write(b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 100)
+        
+    scenes = [
+        {"scene_number": 1, "voiceover_text": "Dating tips"}
+    ]
+    word_timestamps = [
+        {"word": "Dating", "start": 0.0, "end": 0.5},
+        {"word": "tips", "start": 0.5, "end": 1.0}
+    ]
+    
+    output_video = os.path.join(tmp_path, "output.mp4")
+    
+    # Mock moviepy execution to check pipeline without executing heavy FFmpeg rendering in tests
+    with patch("my_automated_traffic.video_agent.ImageClip") as mock_img_clip, \
+         patch("my_automated_traffic.video_agent.AudioFileClip") as mock_audio_clip, \
+         patch("my_automated_traffic.video_agent.CompositeVideoClip") as mock_composite:
+         
+        mock_clip_instance = MagicMock()
+        mock_img_clip.return_value = mock_clip_instance
+        mock_clip_instance.set_duration.return_value = mock_clip_instance
+        mock_clip_instance.set_start.return_value = mock_clip_instance
+        mock_clip_instance.resize.return_value = mock_clip_instance
+        
+        # Mock composite to return a clip that responds to write_videofile
+        mock_comp_instance = MagicMock()
+        mock_composite.return_value = mock_comp_instance
+        mock_comp_instance.set_audio.return_value = mock_comp_instance
+        
+        result = agent.compose_video(
+            scenes=scenes,
+            images=[dummy_img],
+            audio_path=dummy_audio,
+            word_timestamps=word_timestamps,
+            output_video_path=output_video
+        )
+        
+        assert result == output_video
+        mock_comp_instance.write_videofile.assert_called_once()
+
+
+def test_load_font():
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    font = agent._load_font(24)
+    assert font is not None
+
+
+def test_compose_video_cleanup_on_error(tmp_path):
+    from PIL import Image
+    mock_llm = MagicMock()
+    agent = VideoAgent(llm_client=mock_llm)
+    
+    dummy_img = os.path.join(tmp_path, "dummy_scene.png")
+    Image.new("RGB", (108, 192), "#1e1b4b").save(dummy_img)
+    
+    dummy_audio = os.path.join(tmp_path, "dummy_audio.mp3")
+    with open(dummy_audio, "wb") as f:
+        f.write(b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 100)
+        
+    scenes = [
+        {"scene_number": 1, "voiceover_text": "Dating tips"}
+    ]
+    word_timestamps = [
+        {"word": "Dating", "start": 0.0, "end": 0.5}
+    ]
+    
+    output_video = os.path.join(tmp_path, "output.mp4")
+    
+    with patch("my_automated_traffic.video_agent.ImageClip") as mock_img_clip, \
+         patch("my_automated_traffic.video_agent.AudioFileClip") as mock_audio_clip, \
+         patch("my_automated_traffic.video_agent.CompositeVideoClip") as mock_composite:
+         
+        mock_clip_instance = MagicMock()
+        mock_img_clip.return_value = mock_clip_instance
+        mock_clip_instance.set_duration.return_value = mock_clip_instance
+        mock_clip_instance.set_start.return_value = mock_clip_instance
+        mock_clip_instance.resize.return_value = mock_clip_instance
+        
+        mock_audio_instance = MagicMock()
+        mock_audio_clip.return_value = mock_audio_instance
+        
+        mock_comp_instance = MagicMock()
+        mock_composite.return_value = mock_comp_instance
+        mock_comp_instance.set_audio.return_value = mock_comp_instance
+        mock_comp_instance.write_videofile.side_effect = RuntimeError("Encoding failed")
+        
+        with pytest.raises(RuntimeError, match="Encoding failed"):
+            agent.compose_video(
+                scenes=scenes,
+                images=[dummy_img],
+                audio_path=dummy_audio,
+                word_timestamps=word_timestamps,
+                output_video_path=output_video
+            )
+            
+        mock_clip_instance.close.assert_called()
+        mock_audio_instance.close.assert_called()
+        mock_comp_instance.close.assert_called()
+
+
+
+
 

@@ -1,6 +1,6 @@
 import sqlite3
 import pytest
-from src.database import DatabaseManager
+from my_automated_traffic.database import DatabaseManager
 
 @pytest.fixture
 def db(tmp_path):

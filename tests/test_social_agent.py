@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from src.social_agent import SocialAgent
+from my_automated_traffic.social_agent import SocialAgent
 
 def test_filter_and_reply() -> None:
     """Test filtering of relevant threads and response generation with the SocialAgent."""
