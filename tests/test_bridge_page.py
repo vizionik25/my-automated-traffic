@@ -1,6 +1,6 @@
 import os
 import pytest
-from src.bridge_page import QuizPageGenerator
+from my_automated_traffic.bridge_page import QuizPageGenerator
 
 def test_quiz_generation(tmp_path):
     generator = QuizPageGenerator(str(tmp_path))

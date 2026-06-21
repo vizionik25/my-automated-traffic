@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from src.blog_agent import BlogAgent
+from my_automated_traffic.blog_agent import BlogAgent
 
 def test_blog_post_generation():
     mock_llm = MagicMock()

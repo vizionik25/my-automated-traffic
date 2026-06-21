@@ -1,7 +1,7 @@
 import os
 from unittest.mock import MagicMock, patch
 import pytest
-from src.video_agent import VideoAgent
+from my_automated_traffic.video_agent import VideoAgent
 
 def test_video_script_draft():
     mock_llm = MagicMock()
@@ -17,7 +17,7 @@ def test_video_script_draft():
     assert "Hook:" in script
     assert "CTA:" in script
 
-@patch("src.video_agent.gTTS")
+@patch("my_automated_traffic.video_agent.gTTS")
 def test_tts_generation(mock_gtts, tmp_path):
     # Mock the gTTS instance and save method
     mock_instance = MagicMock()
@@ -50,7 +50,7 @@ def test_tts_generation_empty_path():
     with pytest.raises(ValueError, match="Output path cannot be empty."):
         agent.generate_audio("Hello", "")
 
-@patch("src.video_agent.gTTS")
+@patch("my_automated_traffic.video_agent.gTTS")
 def test_tts_generation_runtime_error(mock_gtts):
     mock_instance = MagicMock()
     mock_gtts.return_value = mock_instance

@@ -1,7 +1,7 @@
 """Command Line Interface (CLI) orchestrator for the Affiliate Strategy suite."""
 
 import click
-from src.database import DatabaseManager
+from my_automated_traffic.database import DatabaseManager
 
 @click.group()
 @click.option('--db-path', default='campaigns.db', help='Path to SQLite database')
