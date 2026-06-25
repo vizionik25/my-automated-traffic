@@ -22,7 +22,7 @@ class OpenAIClient:
 
     def __init__(self) -> None:
         """Initialize the client, reading config from environment variables."""
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_APT_KEY")
         api_base = os.environ.get("OPENAI_API_BASE")
         self.model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         self.client = OpenAI(api_key=api_key, base_url=api_base)
