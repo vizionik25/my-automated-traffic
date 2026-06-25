@@ -1,6 +1,14 @@
 import os
 import click
 from typing import List, Any
+import urllib3.util.retry
+_original_retry_init = urllib3.util.retry.Retry.__init__
+def _patched_retry_init(self, *args, **kwargs):
+    if 'method_whitelist' in kwargs:
+        kwargs['allowed_methods'] = kwargs.pop('method_whitelist')
+    _original_retry_init(self, *args, **kwargs)
+urllib3.util.retry.Retry.__init__ = _patched_retry_init
+
 from pytrends.request import TrendReq
 
 class KeywordAgent:
