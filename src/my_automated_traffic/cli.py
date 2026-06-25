@@ -6,62 +6,43 @@ import asyncio
 from typing import Dict, Any, List
 
 from my_automated_traffic.database import DatabaseManager
+from my_automated_traffic.llm_client import OpenAIClient
 from my_automated_traffic.blog_agent import BlogAgent
 from my_automated_traffic.bridge_page import QuizPageGenerator
 from my_automated_traffic.social_agent import SocialAgent
 from my_automated_traffic.video_agent import VideoAgent
+from my_automated_traffic.orchestrator import PipelineOrchestrator
 
-class MockLLMClient:
-    """Mock LLM Client generating realistic outputs for testing and wizard runs."""
-    def generate(self, prompt: str) -> str:
-        prompt_lower = prompt.lower()
-        if "tiktok script" in prompt_lower or "tiktok" in prompt_lower:
-            return (
-                "Hook: Stop making these relationship mistakes!\n"
-                "Body: Focus on communication, validation, and growing together.\n"
-                "CTA: link in bio"
-            )
-        elif "relationship advice script" in prompt_lower:
-            return (
-                '{\n'
-                '  "scenes": [\n'
-                '    {"scene_number": 1, "voiceover_text": "Stop making dating mistakes.", "visual_prompt": "Cinematic couple laughing, warm lighting, SFW"},\n'
-                '    {"scene_number": 2, "voiceover_text": "Take our quiz today.", "visual_prompt": "Phone screen displaying quiz, soft ambient background, SFW"}\n'
-                '  ]\n'
-                '}'
-            )
-        elif "blog post" in prompt_lower:
-            return (
-                "Here are key dating and relationship tips. Communication is key to bonding. "
-                "Understanding your partner's values helps navigate style compatibility."
-            )
-        elif "discuss advice queries" in prompt_lower:
-            return "Yes"
-        elif "response to this thread" in prompt_lower:
-            return "That sounds like a tough situation. Try talking things out openly and see how they feel."
-        return "Standard mock LLM generation for prompt: " + prompt
+
+def _get_llm_client() -> OpenAIClient:
+    """Create and return an OpenAIClient instance.
+
+    Raises:
+        EnvironmentError: If required env vars are not set.
+    """
+    return OpenAIClient()
+
 
 def run_interactive_wizard(ctx: click.Context) -> None:
     """Runs the main interactive wizard menu."""
     db: DatabaseManager = ctx.obj['db']
-    llm_client = MockLLMClient()
 
     while True:
         click.echo("\n==========================================")
         click.echo("       AFFILIATE STRATEGY WIZARD")
         click.echo("==========================================")
-        click.echo("1. Add a New Affiliate Offer")
-        click.echo("2. Create a Campaign")
-        click.echo("3. Generate Blog Post (BlogAgent)")
-        click.echo("4. Generate Bridge Page (QuizPageGenerator)")
-        click.echo("5. Generate Video Asset (VideoAgent)")
-        click.echo("6. Manage Social Leads (SocialAgent)")
-        click.echo("7. Exit")
+        click.echo("1. Add a New Affiliate Offer (+ Run Automation)")
+        click.echo("2. Generate Blog Post (BlogAgent)")
+        click.echo("3. Generate Bridge Page (QuizPageGenerator)")
+        click.echo("4. Generate Video Asset (VideoAgent)")
+        click.echo("5. Manage Social Leads (SocialAgent)")
+        click.echo("6. Exit")
         click.echo("==========================================")
         
-        choice = click.prompt("Select an option (1-7)", type=int, default=7)
+        choice = click.prompt("Select an option (1-6)", type=int, default=6)
         
         if choice == 1:
+            # Collect offer details
             url = click.prompt("Enter offer URL")
             if not (url.startswith("http://") or url.startswith("https://")):
                 click.echo("Error: URL must start with http:// or https://")
@@ -71,28 +52,29 @@ def run_interactive_wizard(ctx: click.Context) -> None:
             niche = click.prompt("Enter niche")
             offer_id = db.add_offer(url, desc, rules, niche)
             click.echo(f"Successfully added offer with ID: {offer_id}")
-            
-        elif choice == 2:
-            # Get all offers
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id, url, niche FROM offers")
-                offers = cursor.fetchall()
-            if not offers:
-                click.echo("No offers available. Please add an offer first.")
-                continue
-            click.echo("\nAvailable Offers:")
-            for o in offers:
-                click.echo(f"ID: {o['id']} | Niche: {o['niche']} | URL: {o['url']}")
-            offer_id = click.prompt("Enter Offer ID", type=int)
-            name = click.prompt("Enter Campaign Name")
+
+            # Prompt for campaign name and run full pipeline
+            campaign_name = click.prompt("Enter campaign name")
+            click.echo("\n🚀 Starting automation pipeline...")
             try:
-                campaign_id = db.add_campaign(offer_id, name)
-                click.echo(f"Successfully created campaign with ID: {campaign_id}")
+                llm_client = _get_llm_client()
+                orchestrator = PipelineOrchestrator(llm_client, db)
+                report_path = orchestrator.run(offer_id, campaign_name)
+                click.echo(f"\n{'='*50}")
+                click.echo("✅ Pipeline complete!")
+                click.echo(f"📄 Deployment report: {report_path}")
+                click.echo(f"{'='*50}")
+            except EnvironmentError as e:
+                click.echo(f"\n❌ Configuration error:\n{e}")
             except Exception as e:
-                click.echo(f"Error creating campaign: {e}")
-            
-        elif choice == 3:
+                click.echo(f"\n❌ Pipeline error: {e}")
+
+        elif choice == 2:
+            try:
+                llm_client = _get_llm_client()
+            except EnvironmentError as e:
+                click.echo(f"\n❌ Configuration error:\n{e}")
+                continue
             keyword = click.prompt("Enter target keyword")
             niche = click.prompt("Enter niche")
             bridge_url = click.prompt("Enter bridge URL")
@@ -103,7 +85,7 @@ def run_interactive_wizard(ctx: click.Context) -> None:
             click.echo(f"Content:\n{post['content']}")
             click.echo("---------------------------")
             
-        elif choice == 4:
+        elif choice == 3:
             title = click.prompt("Enter bridge page title")
             offer_url = click.prompt("Enter offer URL")
             niche = click.prompt("Enter niche")
@@ -115,7 +97,12 @@ def run_interactive_wizard(ctx: click.Context) -> None:
             except Exception as e:
                 click.echo(f"Error generating bridge page: {e}")
             
-        elif choice == 5:
+        elif choice == 4:
+            try:
+                llm_client = _get_llm_client()
+            except EnvironmentError as e:
+                click.echo(f"\n❌ Configuration error:\n{e}")
+                continue
             niche = click.prompt("Enter niche")
             output_video = click.prompt("Enter output video path", default="output.mp4")
             logo_path = click.prompt("Enter logo path (optional)", default="")
@@ -164,7 +151,12 @@ def run_interactive_wizard(ctx: click.Context) -> None:
                     except Exception:
                         pass
             
-        elif choice == 6:
+        elif choice == 5:
+            try:
+                llm_client = _get_llm_client()
+            except EnvironmentError as e:
+                click.echo(f"\n❌ Configuration error:\n{e}")
+                continue
             niche = click.prompt("Enter niche")
             platform = click.prompt("Enter platform (e.g. Reddit)", default="Reddit")
             thread_title = click.prompt("Enter thread title")
@@ -186,7 +178,7 @@ def run_interactive_wizard(ctx: click.Context) -> None:
             except Exception as e:
                 click.echo(f"Error managing social lead: {e}")
             
-        elif choice == 7:
+        elif choice == 6:
             click.echo("Exiting wizard. Goodbye!")
             break
 

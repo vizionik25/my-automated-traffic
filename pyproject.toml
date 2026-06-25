@@ -21,6 +21,7 @@ dependencies = [
     "pluggy==1.6.0",
     "pygments==2.20.0",
     "pytest==9.1.1",
+    "openai>=1.30.0",
     "requests==2.34.2",
     "urllib3==2.7.0",
 ]
