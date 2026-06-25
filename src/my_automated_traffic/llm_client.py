@@ -6,6 +6,9 @@ Ollama, LM Studio, etc.) via environment variables. No mock, no fallback.
 
 import os
 from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class OpenAIClient:
