@@ -1,5 +1,83 @@
-.superpowers/
-.worktrees/
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# C extensions
+*.so
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+pyvenv.cfg
+.python-version
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# Testing and Coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.xml
+htmlcov/
+.hypothesis/
+.ruamel.yaml.cache
+.mypy_cache/
+.ruff_cache/
+
+# Centralized Campaign Database
 campaigns.db
+*.db
+*.sqlite
+
+# Local Worktrees and Agent configuration artifacts
+.worktrees/
+.superpowers/
+.gemini/
+
+# Generated Pipeline Output Artifacts
+output/
+temp_scenes/
+temp_voiceover.mp3
+output.mp4
+
+# OS generated files
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Thumbs.db
