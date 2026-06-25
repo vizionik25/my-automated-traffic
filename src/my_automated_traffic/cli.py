@@ -182,7 +182,7 @@ def run_interactive_wizard(ctx: click.Context) -> None:
             click.echo("Exiting wizard. Goodbye!")
             break
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option('--db-path', default='campaigns.db', help='Path to SQLite database')
 @click.pass_context
 def main_cli(ctx: click.Context, db_path: str) -> None:
