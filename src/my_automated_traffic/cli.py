@@ -4,6 +4,9 @@ import click
 import os
 import asyncio
 from typing import Dict, Any, List
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from my_automated_traffic.database import DatabaseManager
 from my_automated_traffic.llm_client import OpenAIClient
