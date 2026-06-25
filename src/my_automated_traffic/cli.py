@@ -186,11 +186,20 @@ def run_interactive_wizard(ctx: click.Context) -> None:
 @click.option('--db-path', default='campaigns.db', help='Path to SQLite database')
 @click.pass_context
 def main_cli(ctx: click.Context, db_path: str) -> None:
-    """Main command line entry point for the campaign orchestrator.
+    """Affiliate Strategy campaign orchestrator.
 
-    Args:
-        ctx: The Click context object.
-        db_path: Path to the SQLite campaign database.
+    Run without a subcommand to launch the interactive wizard.
+
+    \b
+    Available commands:
+      add-offer      Add a new affiliate offer to the database
+      social-reply   Analyze a social media thread and generate a reply
+
+    \b
+    Required environment variables:
+      OPENAI_API_BASE   API endpoint URL (e.g. https://api.openai.com/v1)
+      OPENAI_API_KEY    Your API key
+      OPENAI_MODEL      Model identifier (optional, defaults to gpt-4o-mini)
     """
     ctx.ensure_object(dict)
     ctx.obj['db'] = DatabaseManager(db_path)
@@ -218,6 +227,53 @@ def add_offer(ctx: click.Context, url: str, desc: str, rules: str, niche: str) -
     db: DatabaseManager = ctx.obj['db']
     offer_id = db.add_offer(url, desc, rules, niche)
     click.echo(f"Successfully added offer with ID: {offer_id}")
+
+@main_cli.command()
+@click.option('--niche', required=True, help='Target niche to check thread relevance against')
+@click.option('--thread-title', required=True, help='Title of the social media thread')
+@click.option('--thread-content', required=True, help='Body content of the social media thread')
+@click.option('--blog-url', required=True, help='Reference blog URL to include in the reply')
+@click.option('--platform', default='Reddit', help='Social media platform (default: Reddit)')
+@click.pass_context
+def social_reply(ctx: click.Context, niche: str, thread_title: str, thread_content: str, blog_url: str, platform: str) -> None:
+    """Analyze a social media thread for niche relevance and generate a reply.
+
+    Checks if the thread is relevant to the given niche, then generates a
+    helpful, empathetic reply that softly references your blog URL.
+
+    \b
+    Example:
+      my-automated-traffic social-reply \\
+        --niche "dating" \\
+        --thread-title "How to approach someone at a coffee shop?" \\
+        --thread-content "I keep seeing this person at my local cafe..." \\
+        --blog-url "https://myblog.com/dating-tips"
+    """
+    try:
+        llm_client = _get_llm_client()
+    except EnvironmentError as e:
+        click.echo(f"\n❌ Configuration error:\n{e}")
+        raise SystemExit(1)
+
+    social_agent = SocialAgent(llm_client)
+    thread = {"title": thread_title, "content": thread_content}
+
+    click.echo(f"Platform: {platform}")
+    click.echo(f"Niche: {niche}")
+    click.echo("Analyzing thread relevance...")
+
+    try:
+        if social_agent.is_relevant(thread, niche):
+            click.echo("✓ Thread is relevant! Generating reply...\n")
+            reply = social_agent.generate_reply(thread, blog_url)
+            click.echo("--- Generated Reply ---")
+            click.echo(reply)
+            click.echo("-----------------------")
+        else:
+            click.echo("✗ Thread is NOT relevant to the niche.")
+    except Exception as e:
+        click.echo(f"Error: {e}")
+        raise SystemExit(1)
 
 if __name__ == '__main__':
     main_cli(obj={})
