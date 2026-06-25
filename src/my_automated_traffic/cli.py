@@ -15,6 +15,7 @@ from my_automated_traffic.bridge_page import QuizPageGenerator
 from my_automated_traffic.social_agent import SocialAgent
 from my_automated_traffic.video_agent import VideoAgent
 from my_automated_traffic.orchestrator import PipelineOrchestrator
+from my_automated_traffic.keyword_agent import KeywordAgent
 
 
 def _get_llm_client() -> OpenAIClient:
@@ -76,9 +77,10 @@ def run_interactive_wizard(ctx: click.Context) -> None:
             except Exception as e:
                 click.echo(f"\n❌ Configuration error:\n{e}")
                 continue
-            keyword = click.prompt("Enter target keyword")
             niche = click.prompt("Enter niche")
             bridge_url = click.prompt("Enter bridge URL")
+            kw_agent = KeywordAgent(llm_client)
+            keyword = kw_agent.discover_keyword(niche)
             agent = BlogAgent(llm_client)
             post = agent.generate_post(keyword, niche, bridge_url)
             click.echo("\n--- Generated Blog Post ---")
