@@ -67,15 +67,13 @@ def run_interactive_wizard(ctx: click.Context) -> None:
                 click.echo("✅ Pipeline complete!")
                 click.echo(f"📄 Deployment report: {report_path}")
                 click.echo(f"{'='*50}")
-            except EnvironmentError as e:
-                click.echo(f"\n❌ Configuration error:\n{e}")
             except Exception as e:
-                click.echo(f"\n❌ Pipeline error: {e}")
+                click.echo(f"\n❌ Pipeline or Configuration error: {e}")
 
         elif choice == 2:
             try:
                 llm_client = _get_llm_client()
-            except EnvironmentError as e:
+            except Exception as e:
                 click.echo(f"\n❌ Configuration error:\n{e}")
                 continue
             keyword = click.prompt("Enter target keyword")
@@ -103,7 +101,7 @@ def run_interactive_wizard(ctx: click.Context) -> None:
         elif choice == 4:
             try:
                 llm_client = _get_llm_client()
-            except EnvironmentError as e:
+            except Exception as e:
                 click.echo(f"\n❌ Configuration error:\n{e}")
                 continue
             niche = click.prompt("Enter niche")
@@ -157,7 +155,7 @@ def run_interactive_wizard(ctx: click.Context) -> None:
         elif choice == 5:
             try:
                 llm_client = _get_llm_client()
-            except EnvironmentError as e:
+            except Exception as e:
                 click.echo(f"\n❌ Configuration error:\n{e}")
                 continue
             niche = click.prompt("Enter niche")
@@ -254,7 +252,7 @@ def social_reply(ctx: click.Context, niche: str, thread_title: str, thread_conte
     """
     try:
         llm_client = _get_llm_client()
-    except EnvironmentError as e:
+    except Exception as e:
         click.echo(f"\n❌ Configuration error:\n{e}")
         raise SystemExit(1)
 
