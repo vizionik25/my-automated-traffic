@@ -3,6 +3,7 @@ from my_automated_traffic.bridge_page import QuizPageGenerator
 from my_automated_traffic.cli import main_cli, add_offer, social_reply
 from my_automated_traffic.database import DatabaseManager
 from my_automated_traffic.llm_client import OpenAIClient
+from my_automated_traffic.keyword_agent import KeywordAgent
 from my_automated_traffic.main import main
 from my_automated_traffic.orchestrator import PipelineOrchestrator
 from my_automated_traffic.social_agent import SocialAgent
@@ -16,6 +17,7 @@ __all__ = [
     "social_reply",
     "DatabaseManager",
     "OpenAIClient",
+    "KeywordAgent",
     "main",
     "PipelineOrchestrator",
     "SocialAgent",

@@ -23,6 +23,7 @@ dependencies = [
     "pytest==9.1.1",
     "openai>=1.30.0",
     "python-dotenv>=1.0.1",
+    "pytrends>=4.8.0",
     "requests==2.34.2",
     "urllib3==2.7.0",
 ]

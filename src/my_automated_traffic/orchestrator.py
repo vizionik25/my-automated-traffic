@@ -16,6 +16,7 @@ from my_automated_traffic.database import DatabaseManager
 from my_automated_traffic.blog_agent import BlogAgent
 from my_automated_traffic.bridge_page import QuizPageGenerator
 from my_automated_traffic.video_agent import VideoAgent
+from my_automated_traffic.keyword_agent import KeywordAgent
 
 
 class PipelineOrchestrator:
@@ -117,10 +118,10 @@ class PipelineOrchestrator:
         # Step 2: Blog Post
         click.echo("\n─── Step 2/3: Generating Blog Post ───")
         try:
+            kw_agent = KeywordAgent(self.llm_client)
+            keyword = kw_agent.discover_keyword(niche)
             agent = BlogAgent(self.llm_client)
-            # Use bridge page path as the link reference
             bridge_url = results["bridge_page"]["path"] if results["bridge_page"] else offer_url
-            keyword = f"{niche} tips"
             post = agent.generate_post(keyword, niche, bridge_url)
 
             blog_filename = "blog_post.md"
