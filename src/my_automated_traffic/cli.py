@@ -40,10 +40,11 @@ def run_interactive_wizard(ctx: click.Context) -> None:
         click.echo("3. Generate Bridge Page (QuizPageGenerator)")
         click.echo("4. Generate Video Asset (VideoAgent)")
         click.echo("5. Manage Social Leads (SocialAgent)")
-        click.echo("6. Exit")
+        click.echo("6. Run Keyword Research (KeywordAgent)")
+        click.echo("7. Exit")
         click.echo("==========================================")
         
-        choice = click.prompt("Select an option (1-6)", type=int, default=6)
+        choice = click.prompt("Select an option (1-7)", type=int, default=7)
         
         if choice == 1:
             # Collect offer details
@@ -182,6 +183,20 @@ def run_interactive_wizard(ctx: click.Context) -> None:
                 click.echo(f"Error managing social lead: {e}")
             
         elif choice == 6:
+            try:
+                llm_client = _get_llm_client()
+            except Exception as e:
+                click.echo(f"\n❌ Configuration error:\n{e}")
+                continue
+            niche = click.prompt("Enter niche")
+            kw_agent = KeywordAgent(llm_client)
+            try:
+                keyword = kw_agent.discover_keyword(niche)
+                click.echo(f"\n✅ Discovered Keyword: {keyword}")
+            except Exception as e:
+                click.echo(f"Error during keyword research: {e}")
+
+        elif choice == 7:
             click.echo("Exiting wizard. Goodbye!")
             break
 
