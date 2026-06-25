@@ -1,6 +1,6 @@
 from my_automated_traffic.blog_agent import BlogAgent
 from my_automated_traffic.bridge_page import QuizPageGenerator
-from my_automated_traffic.cli import main_cli, add_offer
+from my_automated_traffic.cli import main_cli, add_offer, social_reply
 from my_automated_traffic.database import DatabaseManager
 from my_automated_traffic.llm_client import OpenAIClient
 from my_automated_traffic.main import main
@@ -13,6 +13,7 @@ __all__ = [
     "QuizPageGenerator",
     "main_cli",
     "add_offer",
+    "social_reply",
     "DatabaseManager",
     "OpenAIClient",
     "main",
